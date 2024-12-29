@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Woodcutter Minigame</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: transparent;
+            user-select: none;
+            color: white;
+        }
+
+        #minigame-container {
+            display: none;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .title {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #4CAF50;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+        }
+
+        .progress-container {
+            position: relative;
+            width: 400px;
+            height: 30px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            margin: 20px auto;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            transition: width 0.3s ease;
+            border-radius: 15px;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+        }
+
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .key-container {
+            position: relative;
+            margin: 30px 0;
+        }
+
+        .key {
+            display: inline-block;
+            background: linear-gradient(145deg, #ffffff, #e6e6e6);
+            color: #333;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 32px;
+            font-weight: bold;
+            min-width: 60px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transform: translateY(0);
+            transition: all 0.1s ease;
+        }
+
+        .key.pressed {
+            transform: translateY(4px);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            background: linear-gradient(145deg, #e6e6e6, #ffffff);
+        }
+
+        .click-counter {
+            font-size: 24px;
+            color: #4CAF50;
+            margin-top: 20px;
+        }
+
+        .timer-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            margin-top: 20px;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .timer-progress {
+            width: 100%;
+            height: 100%;
+            background: #4CAF50;
+            transition: width linear;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .key.highlight {
+            animation: pulse 0.5s infinite;
+        }
+
+        .stats {
+            margin-top: 20px;
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+    </style>
+</head>
+<body>
+    <div id="minigame-container">
+        <div class="title">Tree Cutting</div>
+        
+        <div class="progress-container">
+            <div class="progress-bar" id="progress-bar"></div>
+            <div class="progress-text">0%</div>
+        </div>
+
+        <div class="key-container">
+            <div class="key" id="active-key">E</div>
+        </div>
+
+        <div class="click-counter">
+            Clicks: <span id="click-count">0</span> / <span id="required-clicks">20</span>
+        </div>
+
+        <div class="timer-bar">
+            <div class="timer-progress" id="timer-progress"></div>
+        </div>
+
+        <div class="stats">
+            Hit Power: <span id="power-meter">0</span>%
+        </div>
+    </div>
+
+    <script>
+        let clickCount = 0;
+        let requiredClicks = 20;
+        let currentKey = 'E';
+        let timerDuration = 5000;
+        let timerInterval;
+        let keyElement = document.getElementById('active-key');
+        let isRoundActive = false;
+
+        function updateProgress() {
+            const progress = (clickCount / requiredClicks) * 100;
+            const clampedProgress = Math.min(progress, 100);
+            
+            document.getElementById('progress-bar').style.width = `${clampedProgress}%`;
+            document.getElementById('click-count').textContent = clickCount;
+            document.getElementById('required-clicks').textContent = requiredClicks;
+            document.querySelector('.progress-text').textContent = `${Math.round(clampedProgress)}%`;
+            document.getElementById('power-meter').textContent = Math.round(clampedProgress);
+
+            if (clampedProgress >= 100 && isRoundActive) {
+                finishGame(true);
+            }
+        }
+
+        function finishGame(success) {
+            if (!isRoundActive) return;
+            isRoundActive = false;
+            alt.emit('woodcutter:roundComplete', success);
+            document.getElementById('minigame-container').style.display = 'none';
+        }
+
+        function startTimer() {
+            const timerBar = document.getElementById('timer-progress');
+            timerBar.style.transition = `width ${timerDuration}ms linear`;
+            timerBar.style.width = '0%';
+        }
+
+        function resetGame() {
+            clickCount = 0;
+            updateProgress();
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+        }
+
+        alt.on('woodcutter:showMinigameUI', () => {
+            document.getElementById('minigame-container').style.display = 'block';
+            resetGame();
+            startTimer();
+            isRoundActive = true;
+            
+            setTimeout(() => {
+                if (isRoundActive) {
+                    finishGame(clickCount >= requiredClicks);
+                }
+            }, timerDuration);
+        });
+
+        alt.on('woodcutter:hideMinigameUI', () => {
+            document.getElementById('minigame-container').style.display = 'none';
+            resetGame();
+            isRoundActive = false;
+        });
+
+        alt.on('woodcutter:showQTEPrompt', (key) => {
+            currentKey = key;
+            keyElement.textContent = key;
+            keyElement.classList.add('highlight');
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (!isRoundActive) return;
+
+            const keyMap = {
+                'E': 69,
+                'F': 70,
+                'Space': 32
+            };
+
+            if (event.keyCode === keyMap[currentKey]) {
+                keyElement.classList.add('pressed');
+                clickCount++;
+                updateProgress();
+            }
+        });
+
+        document.addEventListener('keyup', (event) => {
+            keyElement.classList.remove('pressed');
+        });
+    </script>
+</body>
+</html> 
